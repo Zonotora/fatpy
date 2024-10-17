@@ -20,8 +20,8 @@ def unpack(buffer):
 def pack(value, n):
     buffer = [0] * n
     for i in range(n):
+        value = value >> (i * 8)
         buffer[i] = value & 0xFF
-        value = value >> ((n - i - 1) * 8)
     return buffer
 
 
@@ -425,7 +425,7 @@ class Fat:
                 "nt_res": 0,
                 "creation_time_tenth": 0x01,
                 "creation_time": 0x02,
-                "creation_date": 0x03,
+                "creation_date": 0x0101,
                 "last_accessed_date": 0x04,
                 "modified_time": 0x05,
                 "modified_date": 0x06,
