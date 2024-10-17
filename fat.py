@@ -21,8 +21,27 @@ def pack(value, n):
     buffer = [0] * n
     for i in range(n):
         buffer[i] = value & 0xFF
-        value = value >> (i * 8)
+        value = value >> ((n - i - 1) * 8)
     return buffer
+
+
+class Color:
+    BLUE = "\033[94m"
+    GREEN = "\033[92m"
+    RED = "\033[93m"
+    END = "\033[0m"
+
+    @staticmethod
+    def red(s):
+        return Color.RED + s + Color.END
+
+    @staticmethod
+    def green(s):
+        return Color.GREEN + s + Color.END
+
+    @staticmethod
+    def blue(s):
+        return Color.BLUE + s + Color.END
 
 
 @dataclass
@@ -282,32 +301,31 @@ class Fat:
             if value == 0x0000:
                 return cluster
 
+    def get_index_and_offset_within_sector(self, index):
+        sector = self.read_sector(index)
+        for j in range(self.bpb.n_bytes_per_sector // 32):
+            offset = j * 32
+            first_cluster_lo = unpack(sector[offset + 26 : offset + 28])
+            if first_cluster_lo == 0:
+                return index, offset
+        return None
+
     def scan_for_free_location_in_root(self):
         sector_index = self.first_root_dir_sector
         for i in range(self.n_root_dir_sectors):
             index = sector_index + i
-            sector = self.read_sector(index)
+            if ret := self.get_index_and_offset_within_sector(index):
+                return ret
 
-            for j in range(self.bpb.n_bytes_per_sector // 32):
-                offset = j * 32
-                first_cluster_lo = unpack(sector[j + 26 : j + 28])
-                print(first_cluster_lo)
-                if first_cluster_lo == 0:
-                    print(first_cluster_lo, index, offset)
-                    return index, offset
         assert False, "No more entries"
 
     def scan_for_free_location_in_cluster(self, cluster):
         sector_index = self.first_block_of_cluster(cluster)
         for i in range(self.bpb.n_sectors_per_cluster):
             index = sector_index + i
-            sector = self.read_sector(index)
+            if ret := self.get_index_and_offset_within_sector(index):
+                return ret
 
-            for j in range(self.bpb.n_bytes_per_sector // 32):
-                offset = j * 32
-                first_cluster_lo = unpack(sector[j + 26 : j + 28])
-                if first_cluster_lo == 0:
-                    return index, offset
         # Need to check FAT table for the cluster to the next cluster.
         # Otherwise, allocate new cluster for this cluster entry
         next_cluster = self.read_cluster_value_from_fat(cluster)
@@ -350,7 +368,7 @@ class Fat:
 
                 for j in range(self.bpb.n_bytes_per_sector // 32):
                     offset = j * 32
-                    first_cluster_lo = unpack(sector[j + 26 : j + 28])
+                    first_cluster_lo = unpack(sector[offset + 26 : offset + 28])
                     if first_cluster_lo != 0:
                         buffer.extend(sector[offset : offset + 32])
                         n += 1
@@ -407,10 +425,10 @@ class Fat:
                 "nt_res": 0,
                 "creation_time_tenth": 0x01,
                 "creation_time": 0x02,
-                "creation_date": 0x02,
-                "last_accessed_date": 0x03,
-                "modified_time": 0x04,
-                "modified_date": 0x05,
+                "creation_date": 0x03,
+                "last_accessed_date": 0x04,
+                "modified_time": 0x05,
+                "modified_date": 0x06,
                 "first_cluster_lo": free_cluster,
                 "first_cluster_hi": 0,
                 "file_size": 0,
@@ -502,11 +520,13 @@ class Driver:
         elif cmd == "ls":
             n, entries = self.fat[self.index].get_directory_entries(self.current_dir)
             names = []
-            print(n)
             for i in range(n):
                 entry = FatEntry(entries[i * 32 : (i + 1) * 32])
                 print(entry)
-                names.append(entry.name)
+                if entry.attr & DirectoryAttr.ATTR_DIRECTORY:
+                    names.append(Color.blue(entry.name))
+                else:
+                    names.append(entry.name)
             value = " ".join(names)
         elif cmd == "cat":
             pass
@@ -518,7 +538,8 @@ def main():
     while True:
         cmd = input("$ ")
         value = driver.parse(cmd)
-        print(value)
+        if value != "":
+            print(value)
 
 
 if __name__ == "__main__":
