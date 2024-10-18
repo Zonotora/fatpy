@@ -183,19 +183,28 @@ class Sector:
 
 
 class Descriptor:
-    def __init__(self):
-        self.sector = 0
-        self.cluster = 0
-        self.attr = 0
+    def __init__(self, cluster, sector, attr):
+        self.cluster = cluster
+        self.sector = sector
+        self.attr = attr
 
 
 class DirectoryDescriptor(Descriptor):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cluster, sector, attr):
+        super().__init__(cluster, sector, attr)
 
 
 class FileDescriptor(Descriptor):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, cluster, sector, attr):
+        super().__init__(cluster, sector, attr)
         self.dir_sector = 0
         self.size = 0
+
+
+@dataclass
+class FileInfo:
+    size: int
+    name: str
+    date: int
+    time: int
+    attr: int

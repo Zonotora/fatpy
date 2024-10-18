@@ -2,7 +2,7 @@ import re
 
 from colors import Color
 from filesystem import FileSystem
-from util import DirectoryAttr, FatEntry
+from util import DirectoryAttr, DirectoryDescriptor, FatEntry
 
 
 class Shell:
@@ -19,17 +19,17 @@ class Shell:
                 value = f"partition {index} is not formatted with fat"
         elif m := re.search(r"sec ([0-9]+)", cmd):
             index = int(m.group(1))
-            if index >= len(self.sectors):
+            if index >= len(self.fs.sectors):
                 value = f"sector {index} does not exist"
             else:
-                value = self.sectors[index]
+                value = self.fs.sectors[index]
         elif cmd == "fat":
             value = self.fs.fat[self.index]
-        elif m := re.search(r"nonempty ([0123])", cmd):
+        elif cmd == "nonempty":
             value = self.fs.fat[self.index].get_nonempty()
         elif cmd == "mbr":
-            value = self.mbr
-        elif m := re.search(r"bpb ([0123])", cmd):
+            value = self.fs.mbr
+        elif cmd == "bpb":
             value = self.fs.fat[self.index].get_bpb()
         elif m := re.search(r"mkdir ([A-Za-z0-9]+)", cmd):
             self.fs.fat[self.index].create_directory(self.fs.current_dir, m.group(1))
@@ -39,17 +39,13 @@ class Shell:
         elif m := re.search(r"rm (.+)", cmd):
             value = m.group(1)
         elif cmd == "ls":
-            n, entries = self.fs.fat[self.index].get_directory_entries(
-                self.fs.current_dir
-            )
+            fs = self.fs.fat[self.index].f_readdir(DirectoryDescriptor(0, 0, 0))
             names = []
-            for i in range(n):
-                entry = FatEntry(entries[i * 32 : (i + 1) * 32])
-                print(entry)
-                if entry.attr & DirectoryAttr.ATTR_DIRECTORY:
-                    names.append(Color.blue(entry.name))
+            for i in range(len(fs)):
+                if fs[i].attr & DirectoryAttr.ATTR_DIRECTORY:
+                    names.append(Color.blue(fs[i].name))
                 else:
-                    names.append(entry.name)
+                    names.append(fs[i].name)
             value = " ".join(names)
         elif cmd == "cat":
             pass

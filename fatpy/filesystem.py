@@ -1,7 +1,7 @@
 import struct
 
 from fat import Fat
-from util import SECTOR_LENGTH, FileDescriptor, Mbr, Sector
+from util import SECTOR_LENGTH, Mbr, Sector
 
 
 class FileSystem:
@@ -13,7 +13,7 @@ class FileSystem:
             for i in range(len(self.mbr.partitions))
             if self.mbr.partitions[i].sector != 0
         }
-        self.index = 0
+
         self.current_dir = "/"
 
     def read_disk(self, device):
@@ -35,19 +35,4 @@ class FileSystem:
         pass
 
     def chdir(self):
-        pass
-
-    def f_open(self) -> FileDescriptor:
-        pass
-
-    def f_close(self, fp: FileDescriptor):
-        pass
-
-    def f_read(self, fp: FileDescriptor):
-        pass
-
-    def f_write(self, fp: FileDescriptor):
-        pass
-
-    def f_size(self, fp: FileDescriptor):
         pass
