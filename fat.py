@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from collections import namedtuple
 import struct
 import sys
 import re
@@ -374,6 +373,13 @@ class Fat:
                         n += 1
             return n, buffer
 
+    def reset_cluster(self, cluster):
+        sector_index = self.first_block_of_cluster(cluster)
+        for i in range(self.bpb.n_sectors_per_cluster):
+            index = sector_index + i
+            buffer = [0] * self.bpb.n_bytes_per_sector
+            self.write_sector(index, 0, buffer)
+
     def this_directory_entry(self, cluster):
         return self.encode_entry(
             **{
@@ -446,6 +452,7 @@ class Fat:
         self.write_sector(sector_index, offset, buffer)
 
         if attr & DirectoryAttr.ATTR_DIRECTORY:
+            self.reset_cluster(free_cluster)
             sector_index = self.first_block_of_cluster(free_cluster)
             self.write_sector(sector_index, 0, self.this_directory_entry(free_cluster))
             self.write_sector(
