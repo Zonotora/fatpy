@@ -2,7 +2,7 @@ import re
 
 from colors import Color
 from filesystem import FileSystem
-from util import DirectoryAttr, DirectoryDescriptor
+from util import DirectoryAttr
 
 
 class Shell:

@@ -5,7 +5,7 @@ from util import SECTOR_LENGTH, Mbr, Sector
 
 
 class FileSystem:
-    def __init__(self, device):
+    def __init__(self, device: str):
         self.sectors = self.read_disk(device)
         self.mbr = Mbr.parse(self.sectors[0])
         self.fat = {
@@ -16,7 +16,7 @@ class FileSystem:
 
         self.current_dir = "/"
 
-    def read_disk(self, device):
+    def read_disk(self, device: str) -> list[Sector]:
         sectors = []
 
         with open(device, mode="rb") as f:
@@ -29,10 +29,11 @@ class FileSystem:
                 i += SECTOR_LENGTH
         return sectors
 
-    def write_disk(device):
-        # with open(device, mode="wb") as f:
-        #     pass
-        pass
+    def write_disk(self, device: str):
+        with open(device, mode="wb") as f:
+            for sector in self.sectors:
+                bytes = struct.pack(f"{SECTOR_LENGTH}B", *sector.bytes)
+                f.write(bytes)
 
     def chdir(self):
         pass

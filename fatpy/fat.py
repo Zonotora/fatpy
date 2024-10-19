@@ -1,5 +1,3 @@
-import os
-
 from util import (
     BpbFat16,
     DirectoryAttr,
@@ -142,7 +140,7 @@ class Fat:
             self.first_fat_sector + (cluster * 2) // self.bpb.n_bytes_per_sector
         )
         offset_within_sector = (cluster * 2) % self.bpb.n_bytes_per_sector
-        buffer = [value, value >> 8]
+        buffer = [value & 0xFF, value >> 8]
         self.write_sector(sector_index, offset_within_sector, buffer)
 
     def first_sector_of_cluster(self, cluster):
