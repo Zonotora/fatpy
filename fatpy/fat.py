@@ -239,15 +239,18 @@ class Fat:
             dp = DirectoryDescriptor(0, 0, 0)
         else:
             dp = DirectoryDescriptor(self.cwd.cluster, self.cwd.sector, self.cwd.attr)
+
+        if path == "":
+            return dp
+
         names = path.split("/")
 
         for name in names:
-            if (dp.attr & DirectoryAttr.ATTR_DIRECTORY) == 0:
-                assert False, "entry is not directory"
-
             found = False
             for _sector_index, _offset, entry in self.entries_in_cluster(dp.cluster):
                 if name in entry.name:
+                    if (entry.attr & DirectoryAttr.ATTR_DIRECTORY) == 0:
+                        raise Exception("entry is not directory")
                     dp.cluster = entry.first_cluster_lo
                     dp.sector = self.first_sector_of_cluster(entry.first_cluster_lo)
                     dp.attr = entry.attr
@@ -255,7 +258,7 @@ class Fat:
                     break
 
             if not found:
-                assert False, "can't find path"
+                raise Exception("can't find path")
 
         return dp
 
@@ -292,7 +295,14 @@ class Fat:
         return buffer
 
     def f_open(self, path) -> FileDescriptor:
-        pass
+        if path == "/":
+            raise Exception("directory does already exist")
+        prefix = "/" if path.startswith("/") else ""
+        [*base, name] = path.split("/")
+        parent_path = prefix + "/".join(base)
+        dp = self.follow_path(parent_path)
+        attr = DirectoryAttr.ATTR_ARCHIVE
+        return self.create_file_or_directory(dp, name, attr)
 
     def f_close(self, fp: FileDescriptor):
         pass

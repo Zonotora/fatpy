@@ -39,8 +39,9 @@ class Shell:
         elif m := re.search(r"cd ([A-Za-z0-9\.\/]+)", cmd):
             self.fs.fat[self.index].chdir(m.group(1))
             value = ""
-        elif m := re.search(r"touch (.+)", cmd):
-            pass
+        elif m := re.search(r"touch ([A-Za-z0-9\/]+)", cmd):
+            self.fs.fat[self.index].f_open(m.group(1))
+            value = ""
         elif m := re.search(r"rm (.+)", cmd):
             value = m.group(1)
         elif cmd == "ls":

@@ -9,7 +9,10 @@ def main():
     shell = Shell(fs)
     while True:
         cmd = input("$ ")
-        value = shell.parse(cmd)
+        try:
+            value = shell.parse(cmd)
+        except Exception as e:
+            value = e
         if value != "":
             print(value)
 
