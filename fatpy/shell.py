@@ -2,7 +2,7 @@ import re
 
 from colors import Color
 from filesystem import FileSystem
-from util import DirectoryAttr, DirectoryDescriptor, FatEntry
+from util import DirectoryAttr, DirectoryDescriptor
 
 
 class Shell:
@@ -29,17 +29,22 @@ class Shell:
             value = self.fs.fat[self.index].get_nonempty()
         elif cmd == "mbr":
             value = self.fs.mbr
+        elif cmd == "cwd":
+            value = self.fs.fat[self.index].cwd
         elif cmd == "bpb":
             value = self.fs.fat[self.index].get_bpb()
-        elif m := re.search(r"mkdir ([A-Za-z0-9]+)", cmd):
-            self.fs.fat[self.index].create_directory(self.fs.current_dir, m.group(1))
+        elif m := re.search(r"mkdir ([A-Za-z0-9\/]+)", cmd):
+            self.fs.fat[self.index].f_opendir(m.group(1))
+            value = ""
+        elif m := re.search(r"cd ([A-Za-z0-9\.\/]+)", cmd):
+            self.fs.fat[self.index].chdir(m.group(1))
             value = ""
         elif m := re.search(r"touch (.+)", cmd):
             pass
         elif m := re.search(r"rm (.+)", cmd):
             value = m.group(1)
         elif cmd == "ls":
-            fs = self.fs.fat[self.index].f_readdir(DirectoryDescriptor(0, 0, 0))
+            fs = self.fs.fat[self.index].f_readdir(self.fs.fat[self.index].cwd)
             names = []
             for i in range(len(fs)):
                 if fs[i].attr & DirectoryAttr.ATTR_DIRECTORY:

@@ -1,3 +1,5 @@
+import os
+
 from util import (
     BpbFat16,
     DirectoryAttr,
@@ -7,10 +9,10 @@ from util import (
     FileInfo,
     fat_fields,
     pack,
-    unpack,
 )
 
 END_OF_FILE = 0xFFFF
+N_FAT_ENTRY = 32
 
 
 def entry(name, attr, cluster):
@@ -34,7 +36,7 @@ def encode_entry(**kwargs):
     assert len(kwargs) == len(
         fat_fields
     ), f"kwargs: {len(kwargs)} fat_fields: {len(fat_fields)}"
-    buffer = [0] * 32
+    buffer = [0] * N_FAT_ENTRY
     for field in fat_fields:
         assert field.name in kwargs
         if field.c_string:
@@ -59,7 +61,7 @@ class Fat:
         self.total_sectors = self.bpb.small_sector_count
         self.n_sectors_per_fat = self.bpb.n_sectors_per_fat16
         self.n_root_dir_sectors = (
-            (self.bpb.n_root_entries * 32) + (self.bpb.n_bytes_per_sector - 1)
+            (self.bpb.n_root_entries * N_FAT_ENTRY) + (self.bpb.n_bytes_per_sector - 1)
         ) // self.bpb.n_bytes_per_sector
         self.data_sectors = self.total_sectors - (
             self.bpb.n_reserved_sectors
@@ -78,7 +80,9 @@ class Fat:
         # On FAT 12/16 the root directory is at a fixed position immediately after the FAT
         self.first_root_dir_sector = self.first_data_sector - self.n_root_dir_sectors
 
-        self.cwd = DirectoryDescriptor(0, self.first_root_dir_sector, None)
+        self.cwd = DirectoryDescriptor(
+            0, self.first_root_dir_sector, DirectoryAttr.ATTR_DIRECTORY
+        )
 
     def __str__(self):
         fields = [
@@ -122,7 +126,6 @@ class Fat:
         data = self.read_sector(sector_index)
         for i in range(len(buffer)):
             data[offset + i] = buffer[i]
-        self.sectors[sector_index] = data
 
     def read_fat(self, cluster):
         sector_index = (
@@ -164,23 +167,20 @@ class Fat:
             n_sectors = self.n_root_dir_sectors
         else:
             first_sector_index = self.first_sector_of_cluster(cluster)
-            n_sectors = self.bpb.n_bytes_per_sector
+            n_sectors = self.bpb.n_sectors_per_cluster
 
         for i in range(n_sectors):
             sector_index = first_sector_index + i
             sector = self.read_sector(sector_index)
-            for j in range(self.bpb.n_bytes_per_sector // 32):
-                offset = j * 32
-                yield sector_index, offset, FatEntry(sector[offset : offset + 32])
-
-    def scan_for_free_location_in_root(self):
-        for sector_index, offset, entry in self.entries_in_cluster(0):
-            if entry.first_cluster_lo == 0:
-                return sector_index, offset
+            for j in range(self.bpb.n_bytes_per_sector // N_FAT_ENTRY):
+                offset = j * N_FAT_ENTRY
+                yield sector_index, offset, FatEntry(
+                    sector[offset : offset + N_FAT_ENTRY]
+                )
 
     def scan_for_free_location_in_cluster(self, cluster):
         for sector_index, offset, entry in self.entries_in_cluster(cluster):
-            if entry.first_cluster_lo == 0:
+            if entry.attr == 0:
                 return sector_index, offset
 
         # Need to check FAT table for the cluster to the next cluster.
@@ -195,51 +195,83 @@ class Fat:
 
         return self.scan_for_free_location_in_cluster(next_cluster)
 
-    def create_file_or_directory(self, directory, name, attr):
+    def create_file_or_directory(self, dp: DirectoryDescriptor, name, attr):
         free_cluster = self.scan_fat()
         if free_cluster == END_OF_FILE:
             return
 
-        if name == "/":
-            assert False, "directory exists"
-
         buffer = encode_entry(**entry(name, attr, free_cluster))
 
         self.write_fat(free_cluster, END_OF_FILE),
-        if directory == "/":
-            sector_index, offset = self.scan_for_free_location_in_root()
-        else:
-            pass
-            # parent_cluster = 0
-            # sector_index, offset = self.scan_for_free_location_in_cluster(
-            #     parent_cluster
-            # )
+        sector_index, offset = self.scan_for_free_location_in_cluster(dp.cluster)
         self.write_sector(sector_index, offset, buffer)
 
         if attr & DirectoryAttr.ATTR_DIRECTORY:
             self.reset_cluster(free_cluster)
             sector_index = self.first_sector_of_cluster(free_cluster)
             this_dir = encode_entry(
-                **entry(".", DirectoryAttr.ATTR_DIRECTORY, free_cluster)
+                **entry(
+                    ".",
+                    DirectoryAttr.ATTR_DIRECTORY | DirectoryAttr.ATTR_HIDDEN,
+                    free_cluster,
+                )
             )
-            # TODO: free_cluster
             parent_dir = encode_entry(
-                **entry("..", DirectoryAttr.ATTR_DIRECTORY, free_cluster)
+                **entry(
+                    "..",
+                    DirectoryAttr.ATTR_DIRECTORY | DirectoryAttr.ATTR_HIDDEN,
+                    dp.cluster,
+                )
             )
-            self.write_sector(sector_index, 0, this_dir)
-            self.write_sector(sector_index, 32, parent_dir)
+            self.write_sector(sector_index, 0 * N_FAT_ENTRY, this_dir)
+            self.write_sector(sector_index, 1 * N_FAT_ENTRY, parent_dir)
 
-    def create_directory(self, directory, name, attr=DirectoryAttr.ATTR_DIRECTORY):
-        self.create_file_or_directory(directory, name, attr)
+            return DirectoryDescriptor(free_cluster, sector_index, attr)
+        else:
+            return FileDescriptor(free_cluster, sector_index, attr)
 
     def create_file(self, directory, name, attr=DirectoryAttr.ATTR_ARCHIVE):
         self.create_file_or_directory(directory, name, attr)
 
-    def follow_path(self, path):
-        pass
+    def follow_path(self, path: str):
+        # Check for absolute path.
+        if path.startswith("/"):
+            dp = DirectoryDescriptor(0, 0, 0)
+        else:
+            dp = DirectoryDescriptor(self.cwd.cluster, self.cwd.sector, self.cwd.attr)
+        names = path.split("/")
 
-    def f_opendir(self, path) -> DirectoryDescriptor:
-        pass
+        for name in names:
+            if (dp.attr & DirectoryAttr.ATTR_DIRECTORY) == 0:
+                assert False, "entry is not directory"
+
+            found = False
+            for _sector_index, _offset, entry in self.entries_in_cluster(dp.cluster):
+                if name in entry.name:
+                    dp.cluster = entry.first_cluster_lo
+                    dp.sector = self.first_sector_of_cluster(entry.first_cluster_lo)
+                    dp.attr = entry.attr
+                    found = True
+                    break
+
+            if not found:
+                assert False, "can't find path"
+
+        return dp
+
+    def chdir(self, path):
+        dp = self.follow_path(path)
+        self.cwd = dp
+
+    def f_opendir(self, path: str) -> DirectoryDescriptor:
+        if path == "/":
+            raise Exception("directory does already exist")
+        prefix = "/" if path.startswith("/") else ""
+        [*base, name] = path.split("/")
+        parent_path = prefix + "/".join(base)
+        dp = self.follow_path(parent_path)
+        attr = DirectoryAttr.ATTR_DIRECTORY
+        return self.create_file_or_directory(dp, name, attr)
 
     def f_closedir(self, dp: DirectoryDescriptor):
         pass
@@ -247,7 +279,7 @@ class Fat:
     def f_readdir(self, dp: DirectoryDescriptor) -> list[FileInfo]:
         buffer = []
         for _sector_index, _offset, entry in self.entries_in_cluster(dp.cluster):
-            if entry.first_cluster_lo != 0:
+            if entry.attr != 0:
                 file_info = FileInfo(
                     entry.file_size,
                     entry.name,

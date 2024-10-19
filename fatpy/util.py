@@ -193,6 +193,9 @@ class DirectoryDescriptor(Descriptor):
     def __init__(self, cluster, sector, attr):
         super().__init__(cluster, sector, attr)
 
+    def __str__(self) -> str:
+        return f"dp<{self.cluster}, {self.sector}, {self.attr}>"
+
 
 class FileDescriptor(Descriptor):
     def __init__(self, cluster, sector, attr):
