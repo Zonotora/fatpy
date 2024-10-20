@@ -1,3 +1,4 @@
+import argparse
 import atexit
 import sys
 
@@ -5,14 +6,24 @@ from filesystem import FileSystem
 from shell import Shell
 
 
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("device")
+    parser.add_argument("-w", "--write", action="store_true")
+
+    return parser.parse_args()
+
+
 def main():
-    fs = FileSystem(sys.argv[1])
+    args = parse_args()
+    fs = FileSystem(args.device)
     shell = Shell(fs)
 
     def exit_handler():
-        fs.write_disk(sys.argv[1])
+        fs.write_disk(args.device)
 
-    atexit.register(exit_handler)
+    if args.write:
+        atexit.register(exit_handler)
 
     while True:
         cmd = input("$ ")

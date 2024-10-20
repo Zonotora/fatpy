@@ -226,7 +226,7 @@ class Fat:
 
             return DirectoryDescriptor(free_cluster, sector_index, attr)
         else:
-            return FileDescriptor(free_cluster, sector_index, attr)
+            return FileDescriptor(free_cluster, sector_index, attr, dp.sector, 0)
 
     def create_file(self, directory, name, attr=DirectoryAttr.ATTR_ARCHIVE):
         self.create_file_or_directory(directory, name, attr)
@@ -299,14 +299,32 @@ class Fat:
         [*base, name] = path.split("/")
         parent_path = prefix + "/".join(base)
         dp = self.follow_path(parent_path)
+        for _sector_index, _offset, entry in self.entries_in_cluster(dp.cluster):
+            if name in entry.name:
+                if (entry.attr & DirectoryAttr.ATTR_ARCHIVE) == 0:
+                    raise Exception("entry is not file")
+                sector = self.first_sector_of_cluster(entry.first_cluster_lo)
+                return FileDescriptor(
+                    entry.first_cluster_lo,
+                    sector,
+                    entry.attr,
+                    dp.sector,
+                    entry.file_size,
+                )
+
         attr = DirectoryAttr.ATTR_ARCHIVE
         return self.create_file_or_directory(dp, name, attr)
 
     def f_close(self, fp: FileDescriptor):
         pass
 
-    def f_read(self, fp: FileDescriptor):
-        pass
+    def f_read(self, fp: FileDescriptor) -> str:
+        content = [0] * fp.size
+        i = 0
+        for i in range(fp.size):
+            sector = self.sectors[fp.sector + i // self.bpb.n_bytes_per_sector]
+            content[i] = chr(sector[i % self.bpb.n_bytes_per_sector])
+        return "".join(content)
 
     def f_write(self, fp: FileDescriptor):
         pass

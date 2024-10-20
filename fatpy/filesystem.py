@@ -1,7 +1,7 @@
 import struct
 
 from fat import Fat
-from util import SECTOR_LENGTH, Mbr, Sector
+from util import SECTOR_LENGTH, Mbr, Partition, Sector
 
 
 class FileSystem:
@@ -13,6 +13,11 @@ class FileSystem:
             for i in range(len(self.mbr.partitions))
             if self.mbr.partitions[i].sector != 0
         }
+        if len(self.fat) == 0:
+            partition = Partition([0] * 16)
+            partition.sector = 0
+            partition.size = len(self.sectors) * SECTOR_LENGTH
+            self.fat[0] = Fat(self.sectors, partition)
 
         self.current_dir = "/"
 

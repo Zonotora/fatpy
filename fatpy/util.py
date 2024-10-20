@@ -198,10 +198,10 @@ class DirectoryDescriptor(Descriptor):
 
 
 class FileDescriptor(Descriptor):
-    def __init__(self, cluster, sector, attr):
+    def __init__(self, cluster, sector, attr, dir_sector, size):
         super().__init__(cluster, sector, attr)
-        self.dir_sector = 0
-        self.size = 0
+        self.dir_sector = dir_sector
+        self.size = size
 
 
 @dataclass

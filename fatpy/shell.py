@@ -53,6 +53,7 @@ class Shell:
                 else:
                     names.append(fs[i].name)
             value = " ".join(names)
-        elif cmd == "cat":
-            pass
+        elif m := re.search(r"cat ([A-Za-z0-9\/]+)", cmd):
+            fp = self.fs.fat[self.index].f_open(m.group(1))
+            value = self.fs.fat[self.index].f_read(fp)
         return value
